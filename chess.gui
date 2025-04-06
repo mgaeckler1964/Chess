@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="iso-8859-1" ?>
+<gui>
+<forms>
+<form name="ChessFORM" style="277807104" width="694" height="375" caption="Chess" id="128" baseClass="OverlappedWindow" bgColor="COLOR_WINDOW " bg_red="0" bg_green="0" bg_blue="0">
+<layoutManager type="AttachmentManager" />
+</form>
+</forms>
+</gui>
