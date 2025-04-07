@@ -113,20 +113,34 @@ static int META_WIDTH=4;
 
 class ChessMainWindow : public ChessFORM_form
 {
-	unsigned	m_squareSize;
-	unsigned	m_maxHeight;
-	unsigned	m_maxWidth;
+	unsigned			m_squareSize;
+	unsigned			m_maxHeight;
+	unsigned			m_maxWidth;
+	gak::chess::Board	m_board;
+	gak::chess::Figure	*m_selected;
 
 	void drawFigure( Device &hDC, int x, int y, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
 	virtual ProcessStatus handleCreate( void );
 	virtual ProcessStatus handleButtonClick( int control );
+	virtual ProcessStatus handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position );
 	virtual ProcessStatus handleResize( const Size &newSize );
 	virtual ProcessStatus handleRepaint( Device &hDC );
 
 public:
-	ChessMainWindow() : ChessFORM_form( NULL ), m_squareSize(0) 
+	ChessMainWindow() : ChessFORM_form( NULL ), m_squareSize(0), m_selected(NULL) 
 	{
+		STRING strChess;
+		
+		if( gak::exists("chess.txt") )
+		{
+			strChess.readFromFile("chess.txt");
+		}
+		if( strChess.isEmpty() )
+			m_board.reset();
+		else
+			m_board.generateFromString(strChess);
+
 	}
 };
 
@@ -258,6 +272,64 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 	return psPROCESSED;
 }
 
+ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position )
+{
+	if( leftButton == lbUP )
+	{
+		int winCol = position.x/m_squareSize;
+		int winRow = position.y/m_squareSize;
+
+		if( winCol < gak::chess::NUM_COLS && winRow < gak::chess::NUM_ROWS )
+		{
+			char chessCol = winCol+gak::chess::MIN_COL_LETTER;
+			char chessRow = gak::chess::NUM_ROWS - winRow;
+
+			if( !m_selected )
+			{
+				m_selected = m_board.getFigure(chessCol, chessRow);
+				if( m_selected && m_selected->m_color != m_board.getNextColor() )
+				{
+					m_selected = NULL;
+				}
+			}
+			else
+			{
+				gak::chess::Position dest = gak::chess::Position(chessCol, chessRow);
+				if( !m_board.checkMoveTo(m_selected, dest ) )
+				{
+					m_board.moveTo(m_selected, dest );
+					m_selected = NULL;
+
+					int qual;
+					gak::chess::Movement next = m_board.findBest(1,&qual);
+					if( qual )
+					{
+						if( next.promotionType != gak::chess::Figure::ftNone )
+						{
+							m_board.promote(next.fig, next.promotionType, next.dest );
+						}
+						else
+						{
+							m_board.moveTo( next.fig, next.dest);
+						}
+						STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
+						strChess.writeToFile("chess.txt");
+					}
+				}
+				else if(m_selected->getPos() != dest)
+				{
+					m_selected = NULL;
+				}
+			}
+
+			invalidateWindow();
+			return psPROCESSED;
+		}
+	}
+
+	return psDO_DEFAULT;
+}
+
 ProcessStatus ChessMainWindow::handleResize( const Size &newSize )
 {
 	int squareWidth = newSize.width / gak::chess::NUM_COLS;
@@ -274,10 +346,13 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 {
 	Pen	blackPen = Pen().setColor(0,0,0).setWidth(1);
 	Pen	whitePen = Pen().setColor(0xFF,0xFF,0xFF).setWidth(1);
+	Pen	selFramePen = Pen().setColor(0,0,0xFF).setWidth(3);
+	Pen	targetFramePen = Pen().setColor(0,0xFF,0).setWidth(3);
 
-	Brush whiteField, blackField;
+	Brush whiteField, blackField, frameBrush;
 	whiteField.create( 237, 222, 147 );
 	blackField.create( 138, 59, 59 );
+	frameBrush.selectBrush(Brush::sbNull);
 
 	Brush whiteFigs, blackFigs;
 	whiteFigs.create( 190, 178, 118 );
@@ -311,36 +386,73 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 		hDC.lineTo( x, m_maxHeight );
 	}
 
-
-	hDC.selectPen(blackPen);
-	hDC.selectBrush( whiteFigs );
-	for( int col = 0; col<8;++col )
+	for( size_t i = 0; i<gak::chess::NUM_FIELDS; ++i )
 	{
-		drawFigure(hDC, col,1, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, pawn, arraySize(pawn));
+		gak::chess::Figure *fig = m_board.getFigure(i);
+		if( fig )
+		{
+			if( fig->m_color == gak::chess::Figure::White )
+			{
+				hDC.selectPen( blackPen );
+				hDC.selectBrush( whiteFigs );
+			}
+			else
+			{
+				hDC.selectPen( whitePen );
+				hDC.selectBrush( blackFigs );
+			}
+			const gak::chess::Position &pos = fig->getPos();
+			int col = pos.col - gak::chess::MIN_COL_LETTER;
+			int row = pos.row - 1;
+			switch( fig->getType() )
+			{
+			case gak::chess::Figure::ftPawn:
+				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, pawn, arraySize(pawn));
+				break;
+			case gak::chess::Figure::ftKnight:
+				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
+				break;
+			case gak::chess::Figure::ftBishop:
+				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
+				break;
+			case gak::chess::Figure::ftRook:
+				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
+				break;
+			case gak::chess::Figure::ftQueen:
+				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, queen, arraySize(queen));
+				break;
+			case gak::chess::Figure::ftKing:
+				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, king, arraySize(king));
+				break;
+			}
+		}
 	}
-	drawFigure(hDC, 0,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
-	drawFigure(hDC, 1,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
-	drawFigure(hDC, 2,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
-	drawFigure(hDC, 3,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, queen, arraySize(queen));
-	drawFigure(hDC, 4,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, king, arraySize(king));
-	drawFigure(hDC, 5,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
-	drawFigure(hDC, 6,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
-	drawFigure(hDC, 7,0, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
 
-	hDC.selectPen(whitePen);
-	hDC.selectBrush( blackFigs );
-	for( int col = 0; col<8;++col )
+	if(m_selected)
 	{
-		drawFigure(hDC, col,6, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, pawn, arraySize(pawn));
+		const gak::chess::Position &pos = m_selected->getPos();
+		int left = (pos.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
+		int right = left + m_squareSize;
+		int top = (gak::chess::NUM_ROWS - pos.row) * m_squareSize;
+		int bottom = top + m_squareSize;
+
+		hDC.selectBrush(frameBrush);
+		hDC.selectPen(selFramePen);
+		hDC.rectangle( left, top, right, bottom );
+
+		const gak::chess::PotentialDestinations &pot = m_selected->getPossible();
+
+		hDC.selectPen(targetFramePen);
+
+		for( size_t i=0; i<pot.numTargets; ++i )
+		{
+			int left = (pot.targets[i].target.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
+			int right = left + m_squareSize;
+			int top = (gak::chess::NUM_ROWS - pot.targets[i].target.row) * m_squareSize;
+			int bottom = top + m_squareSize;
+			hDC.rectangle( left, top, right, bottom );
+		}
 	}
-	drawFigure(hDC, 0,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
-	drawFigure(hDC, 1,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
-	drawFigure(hDC, 2,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
-	drawFigure(hDC, 3,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, queen, arraySize(queen));
-	drawFigure(hDC, 4,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, king, arraySize(king));
-	drawFigure(hDC, 5,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
-	drawFigure(hDC, 6,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
-	drawFigure(hDC, 7,7, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
 
 	return psPROCESSED;
 }
