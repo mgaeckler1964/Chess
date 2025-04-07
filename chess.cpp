@@ -39,6 +39,7 @@
 // --------------------------------------------------------------------- //
 
 #include <WINLIB/WINAPP.H>
+#include <gak/numericString.h>
 
 #include <gak/chess.h>
 
@@ -116,19 +117,22 @@ class ChessMainWindow : public ChessFORM_form
 	unsigned			m_squareSize;
 	unsigned			m_maxHeight;
 	unsigned			m_maxWidth;
+	int					m_depth;
 	gak::chess::Board	m_board;
 	gak::chess::Figure	*m_selected;
+
 
 	void drawFigure( Device &hDC, int x, int y, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
 	virtual ProcessStatus handleCreate( void );
+	virtual ProcessStatus handleEditChange( int control );
 	virtual ProcessStatus handleButtonClick( int control );
 	virtual ProcessStatus handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position );
 	virtual ProcessStatus handleResize( const Size &newSize );
 	virtual ProcessStatus handleRepaint( Device &hDC );
 
 public:
-	ChessMainWindow() : ChessFORM_form( NULL ), m_squareSize(0), m_selected(NULL) 
+	ChessMainWindow() : ChessFORM_form( NULL ), m_squareSize(0), m_selected(NULL), m_depth(1)
 	{
 		STRING strChess;
 		
@@ -216,6 +220,8 @@ static WindowsApplication	windowsApplication;
 
 void ChessMainWindow::drawFigure( Device &hDC, int x, int y, int xFactor, int yFactor, const POINT *points, size_t numPoints  )
 {
+	int leftOffset = LeftCHILD->getClientRectangle().getWidth();
+
 	x *= m_squareSize;
 	y *= m_squareSize;
 	int minX = m_squareSize;
@@ -226,7 +232,7 @@ void ChessMainWindow::drawFigure( Device &hDC, int x, int y, int xFactor, int yF
 	{
 		int px = points[i].x *xFactor;
 		int py = points[i].y *yFactor;
-		figure[i].x = x + px;
+		figure[i].x = leftOffset + x + px;
 		figure[i].y = m_maxHeight - (y + py);
 
 		minX = gak::math::min(minX, px );
@@ -261,6 +267,26 @@ ProcessStatus ChessMainWindow::handleCreate( void )
 	return psDO_DEFAULT;
 }
 
+ProcessStatus ChessMainWindow::handleEditChange( int control )
+{
+	switch( control )
+	{
+		case DepthCONTROL_id:
+		{
+			STRING text = DepthCONTROL->getText();
+			int depth = gak::getValueN<int>(text);
+			if(depth)
+			{
+				m_depth = depth;
+			}
+
+		}
+		default:
+			return ChessFORM_form::handleEditChange( control );
+	}
+	return psPROCESSED;
+}
+
 ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 {
 	switch( buttonID )
@@ -276,7 +302,8 @@ ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM m
 {
 	if( leftButton == lbUP )
 	{
-		int winCol = position.x/m_squareSize;
+		int leftOffset = LeftCHILD->getClientRectangle().getWidth();
+		int winCol = (position.x-leftOffset)/m_squareSize;
 		int winRow = position.y/m_squareSize;
 
 		if( winCol < gak::chess::NUM_COLS && winRow < gak::chess::NUM_ROWS )
@@ -301,7 +328,7 @@ ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM m
 					m_selected = NULL;
 
 					int qual;
-					gak::chess::Movement next = m_board.findBest(1,&qual);
+					gak::chess::Movement next = m_board.findBest(m_depth,&qual);
 					if( qual )
 					{
 						if( next.promotionType != gak::chess::Figure::ftNone )
@@ -332,7 +359,8 @@ ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM m
 
 ProcessStatus ChessMainWindow::handleResize( const Size &newSize )
 {
-	int squareWidth = newSize.width / gak::chess::NUM_COLS;
+	int leftOffset = 280;
+	int squareWidth = (newSize.width-leftOffset) / gak::chess::NUM_COLS;
 	int squareHeight = newSize.height / gak::chess::NUM_ROWS;
 	m_squareSize = gak::math::min(squareWidth, squareHeight);
 	m_maxHeight = m_squareSize * gak::chess::NUM_ROWS;
@@ -360,9 +388,10 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 	hDC.selectPen(blackPen);
 	bool paintWhite=true;
+	int leftOffset = LeftCHILD->getClientRectangle().getWidth();
 	for( int i=0; i<gak::chess::NUM_COLS; ++i )
 	{
-		int left = i*m_squareSize;
+		int left = leftOffset + i*m_squareSize;
 		for( int j=0; j<gak::chess::NUM_ROWS; ++j )
 		{
 			if( j )
@@ -377,10 +406,10 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 	for( int i=1, y=m_squareSize; i<= gak::chess::NUM_ROWS; ++i, y += m_squareSize )
 	{
-		hDC.moveTo(0,y);
+		hDC.moveTo(leftOffset,y);
 		hDC.lineTo( m_maxWidth, y );
 	}
-	for( int i=1, x=m_squareSize; i<= gak::chess::NUM_COLS; ++i, x += m_squareSize )
+	for( int i=1, x=leftOffset + m_squareSize; i<= gak::chess::NUM_COLS; ++i, x += m_squareSize )
 	{
 		hDC.moveTo(x,0);
 		hDC.lineTo( x, m_maxHeight );
@@ -431,7 +460,7 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 	if(m_selected)
 	{
 		const gak::chess::Position &pos = m_selected->getPos();
-		int left = (pos.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
+		int left = leftOffset + (pos.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
 		int right = left + m_squareSize;
 		int top = (gak::chess::NUM_ROWS - pos.row) * m_squareSize;
 		int bottom = top + m_squareSize;
@@ -446,14 +475,13 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 		for( size_t i=0; i<pot.numTargets; ++i )
 		{
-			int left = (pot.targets[i].target.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
+			int left = leftOffset + (pot.targets[i].target.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
 			int right = left + m_squareSize;
 			int top = (gak::chess::NUM_ROWS - pot.targets[i].target.row) * m_squareSize;
 			int bottom = top + m_squareSize;
 			hDC.rectangle( left, top, right, bottom );
 		}
 	}
-
 	return psPROCESSED;
 }
 

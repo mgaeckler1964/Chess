@@ -18,6 +18,9 @@
 namespace winlibGUI {
 
 	const int ChessFORM_id=128;
+	const int DepthCONTROL_id=130;
+	const int LABEL_id=129;
+	const int LeftCHILD_id=131;
 
 	class GuiApplication : public winlib::Application {
 		public:
@@ -32,6 +35,9 @@ namespace winlibGUI {
 			return OverlappedWindow::create(parent,"ChessFORM");
 		}
 
+		winlib::Label *LABEL;
+		winlib::EditControl *DepthCONTROL;
+		winlib::FrameChild *LeftCHILD;
 		private:
 		virtual void getControls();
 	};	// end of ChessFORM
