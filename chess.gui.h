@@ -17,17 +17,19 @@
 
 namespace winlibGUI {
 
-	const int BishopBtn_id=133;
+	const int BishopBtn_id=135;
+	const int BlackClk_id=132;
 	const int ChessFORM_id=128;
-	const int ControlCHILD_id=138;
+	const int ControlCHILD_id=140;
 	const int DepthEdt_id=129;
-	const int EvalLABEL_id=131;
-	const int KnightBtn_id=134;
-	const int PromotionList_id=137;
-	const int QueenBtn_id=136;
-	const int RestartBtn_id=130;
-	const int RookBtn_id=135;
-	const int TurnBtn_id=132;
+	const int EvalLABEL_id=130;
+	const int KnightBtn_id=136;
+	const int PromotionList_id=139;
+	const int QueenBtn_id=138;
+	const int RestartBtn_id=133;
+	const int RookBtn_id=137;
+	const int TurnBtn_id=134;
+	const int WhiteClk_id=131;
 
 	class GuiApplication : public winlib::Application {
 		public:
@@ -43,8 +45,10 @@ namespace winlibGUI {
 		}
 
 		winlib::EditControl *DepthEdt;
-		winlib::PushButton *RestartBtn;
 		winlib::Label *EvalLABEL;
+		winlib::DateTimePicker *WhiteClk;
+		winlib::DateTimePicker *BlackClk;
+		winlib::PushButton *RestartBtn;
 		winlib::PushButton *TurnBtn;
 		winlib::RadioButton *BishopBtn;
 		winlib::RadioButton *KnightBtn;

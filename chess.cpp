@@ -138,8 +138,8 @@ class ChessMainWindow : public ChessFORM_form
 	// chess coordinates: left->right/bottom->top (a1-h8)
 	gak::chess::Position window2Board( const Point &winBoard )
 	{
-		char chessCol = winBoard.x+gak::chess::MIN_COL_LETTER;
-		char chessRow = gak::chess::NUM_ROWS - winBoard.y;
+		char chessCol = char(winBoard.x+gak::chess::MIN_COL_LETTER);
+		char chessRow = char(gak::chess::NUM_ROWS - winBoard.y);
 
 		if( m_swapedDisplay )
 		{
@@ -212,6 +212,7 @@ class ChessMainWindow : public ChessFORM_form
 	}
 
 	void makeNextComputerMove();
+	void displayClock();
 	void displayEval();
 	void drawFigure( Device &hDC, Point logWindowsPos, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
@@ -221,6 +222,7 @@ class ChessMainWindow : public ChessFORM_form
 	virtual ProcessStatus handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position );
 	virtual ProcessStatus handleResize( const Size &newSize );
 	virtual ProcessStatus handleRepaint( Device &hDC );
+	virtual void handleTimer( void );
 
 public:
 	ChessMainWindow() : ChessFORM_form( NULL ), m_leftOffset(280), m_squareSize(0), m_swapedDisplay(false), m_selected(NULL), m_depth(1)
@@ -232,10 +234,13 @@ public:
 			strChess.readFromFile("chess.txt");
 		}
 		if( strChess.isEmpty() )
+		{
 			m_board.reset();
+		}
 		else
+		{
 			m_board.generateFromString(strChess);
-
+		}
 	}
 };
 
@@ -342,7 +347,7 @@ void ChessMainWindow::drawFigure( Device &hDC, Point logWindowsPos, int xFactor,
 			}
 		}
 	}
-	hDC.polygon(figure.getDataBuffer(), figure.size());
+	hDC.polygon(figure.getDataBuffer(), int(figure.size()));
 }
 
 void ChessMainWindow::makeNextComputerMove()
@@ -363,6 +368,12 @@ void ChessMainWindow::makeNextComputerMove()
 		strChess.writeToFile("chess.txt");
 	}
 	displayEval();
+}
+
+void ChessMainWindow::displayClock()
+{
+	WhiteClk->setStopWatch(m_board.getWhiteClock());
+	BlackClk->setStopWatch(m_board.getBlackClock());
 }
 
 void ChessMainWindow::displayEval()
@@ -390,6 +401,7 @@ ProcessStatus ChessMainWindow::handleCreate( void )
 	STRING depth = gak::formatNumber(m_depth);
 	DepthEdt->setText(depth);
 	displayEval();
+	setTimer(1000);
 
 	return psDO_DEFAULT;
 }
@@ -408,10 +420,8 @@ ProcessStatus ChessMainWindow::handleEditChange( int control )
 			}
 
 		}
-		default:
-			return ChessFORM_form::handleEditChange( control );
 	}
-	return psPROCESSED;
+	return ChessFORM_form::handleEditChange( control );
 }
 
 ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
@@ -436,7 +446,7 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 	return psPROCESSED;
 }
 
-ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position )
+ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM /* modifier */, const Point &position )
 {
 	if( leftButton == lbUP )
 	{
@@ -513,7 +523,6 @@ ProcessStatus ChessMainWindow::handleResize( const Size &newSize )
 ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 {
 	Pen	blackPen = Pen().setColor(0,0,0).setWidth(1);
-//	Pen	whitePen = Pen().setColor(0xFF,0xFF,0xFF).setWidth(1);
 	Pen	selFramePen = Pen().setColor(0,0,0xFF).setWidth(3);
 	Pen	targetFramePen = Pen().setColor(0,0xFF,0).setWidth(3);
 
@@ -569,8 +578,6 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 				hDC.selectPen( blackPen );
 				hDC.selectBrush( blackFigs );
 			}
-			const gak::chess::Position &pos = fig->getPos();
-
 			Point winPos = board2Window( fig->getPos() );
 
 			switch( fig->getType() )
@@ -618,6 +625,11 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 		}
 	}
 	return psPROCESSED;
+}
+
+void ChessMainWindow::handleTimer( void )
+{
+	displayClock();
 }
 
 // --------------------------------------------------------------------- //
