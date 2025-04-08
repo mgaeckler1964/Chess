@@ -17,10 +17,17 @@
 
 namespace winlibGUI {
 
+	const int BishopBtn_id=133;
 	const int ChessFORM_id=128;
-	const int DepthCONTROL_id=130;
-	const int LABEL_id=129;
-	const int LeftCHILD_id=131;
+	const int ControlCHILD_id=138;
+	const int DepthEdt_id=129;
+	const int EvalLABEL_id=131;
+	const int KnightBtn_id=134;
+	const int PromotionList_id=137;
+	const int QueenBtn_id=136;
+	const int RestartBtn_id=130;
+	const int RookBtn_id=135;
+	const int TurnBtn_id=132;
 
 	class GuiApplication : public winlib::Application {
 		public:
@@ -35,9 +42,16 @@ namespace winlibGUI {
 			return OverlappedWindow::create(parent,"ChessFORM");
 		}
 
-		winlib::Label *LABEL;
-		winlib::EditControl *DepthCONTROL;
-		winlib::FrameChild *LeftCHILD;
+		winlib::EditControl *DepthEdt;
+		winlib::PushButton *RestartBtn;
+		winlib::Label *EvalLABEL;
+		winlib::PushButton *TurnBtn;
+		winlib::RadioButton *BishopBtn;
+		winlib::RadioButton *KnightBtn;
+		winlib::RadioButton *RookBtn;
+		winlib::RadioButton *QueenBtn;
+		winlib::FrameChild *PromotionList;
+		winlib::FrameChild *ControlCHILD;
 		private:
 		virtual void getControls();
 	};	// end of ChessFORM

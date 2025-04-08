@@ -40,6 +40,7 @@
 
 #include <WINLIB/WINAPP.H>
 #include <gak/numericString.h>
+#include <gak/fmtNumber.h>
 
 #include <gak/chess.h>
 
@@ -114,15 +115,105 @@ static int META_WIDTH=4;
 
 class ChessMainWindow : public ChessFORM_form
 {
+	int					m_leftOffset;
 	unsigned			m_squareSize;
 	unsigned			m_maxHeight;
 	unsigned			m_maxWidth;
 	int					m_depth;
+	bool				m_swapedDisplay;
 	gak::chess::Board	m_board;
 	gak::chess::Figure	*m_selected;
 
+	// winboard coordinates: left->right/top->bottom (0...7)
+	Point mouseToWinBoard( const Point &position )
+	{
+		Point winPos;
 
-	void drawFigure( Device &hDC, int x, int y, int xFactor, int yFactor, const POINT *points, size_t numPoints );
+		winPos.x = (position.x-m_leftOffset)/m_squareSize;
+		winPos.y = position.y/m_squareSize;
+
+		return winPos;
+	}
+
+	// chess coordinates: left->right/bottom->top (a1-h8)
+	gak::chess::Position window2Board( const Point &winBoard )
+	{
+		char chessCol = winBoard.x+gak::chess::MIN_COL_LETTER;
+		char chessRow = gak::chess::NUM_ROWS - winBoard.y;
+
+		if( m_swapedDisplay )
+		{
+			chessCol = gak::chess::NUM_COLS - chessCol + 1;
+			chessRow = gak::chess::NUM_ROWS - chessRow + 1;
+		}
+		return gak::chess::Position(chessCol, chessRow);
+	}
+
+	// winboard coordinates: left->right/top->bottom (0-7)
+	Point board2Window( const gak::chess::Position &chessBoard )
+	{
+		Point winPos;
+
+		winPos.x = chessBoard.col - gak::chess::MIN_COL_LETTER;
+		winPos.y = gak::chess::NUM_ROWS - chessBoard.row;
+
+		if( m_swapedDisplay )
+		{
+			winPos.x = gak::chess::NUM_COLS - winPos.x - 1;
+			winPos.y = gak::chess::NUM_ROWS - winPos.y - 1;
+		}
+
+		return winPos;
+	}
+
+	Point window2Pixed( const Point &input )
+	{
+		Point result;
+
+		result.x = input.x * m_squareSize;
+		result.y = input.y * m_squareSize;
+
+		return result;
+	}
+
+	RectBorder board2RectBorder( const gak::chess::Position &chessBoardPos )
+	{
+		RectBorder rect;
+		Point		winPos = board2Window( chessBoardPos );
+		winPos = window2Pixed(winPos);
+
+		rect.left = m_leftOffset + winPos.x;
+		rect.top = winPos.y;
+		rect.right = m_leftOffset + winPos.x+m_squareSize;
+		rect.bottom = winPos.y+m_squareSize;
+
+		return rect;
+	}
+
+	gak::chess::Figure::Type getPromotion() const
+	{
+		if( !PromotionList->ForeignWindow::isVisible() )
+			return gak::chess::Figure::ftNone;
+		if( BishopBtn->isActive() )
+			return gak::chess::Figure::ftBishop;
+		if( KnightBtn->isActive() )
+			return gak::chess::Figure::ftKnight;
+		if( RookBtn->isActive() )
+			return gak::chess::Figure::ftRook;
+		if( QueenBtn->isActive() )
+			return gak::chess::Figure::ftQueen;
+
+		return gak::chess::Figure::ftNone;
+	}
+	void unselect()
+	{
+		m_selected = NULL;
+		PromotionList->hide();
+	}
+
+	void makeNextComputerMove();
+	void displayEval();
+	void drawFigure( Device &hDC, Point logWindowsPos, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
 	virtual ProcessStatus handleCreate( void );
 	virtual ProcessStatus handleEditChange( int control );
@@ -132,7 +223,7 @@ class ChessMainWindow : public ChessFORM_form
 	virtual ProcessStatus handleRepaint( Device &hDC );
 
 public:
-	ChessMainWindow() : ChessFORM_form( NULL ), m_squareSize(0), m_selected(NULL), m_depth(1)
+	ChessMainWindow() : ChessFORM_form( NULL ), m_leftOffset(280), m_squareSize(0), m_swapedDisplay(false), m_selected(NULL), m_depth(1)
 	{
 		STRING strChess;
 		
@@ -218,12 +309,13 @@ static WindowsApplication	windowsApplication;
 // ----- class privates ------------------------------------------------ //
 // --------------------------------------------------------------------- //
 
-void ChessMainWindow::drawFigure( Device &hDC, int x, int y, int xFactor, int yFactor, const POINT *points, size_t numPoints  )
+void ChessMainWindow::drawFigure( Device &hDC, Point logWindowsPos, int xFactor, int yFactor, const POINT *points, size_t numPoints  )
 {
-	int leftOffset = LeftCHILD->getClientRectangle().getWidth();
+	Point windowsPos = window2Pixed( logWindowsPos );
 
-	x *= m_squareSize;
-	y *= m_squareSize;
+	int x = windowsPos.x;
+	int y = windowsPos.y;
+
 	int minX = m_squareSize;
 	int maxX = 0;
 	gak::PODarray<POINT>	figure;
@@ -232,8 +324,8 @@ void ChessMainWindow::drawFigure( Device &hDC, int x, int y, int xFactor, int yF
 	{
 		int px = points[i].x *xFactor;
 		int py = points[i].y *yFactor;
-		figure[i].x = leftOffset + x + px;
-		figure[i].y = m_maxHeight - (y + py);
+		figure[i].x = m_leftOffset + x + px;
+		figure[i].y = y + m_squareSize - py;
 
 		minX = gak::math::min(minX, px );
 		maxX = gak::math::max(maxX, px );
@@ -253,6 +345,35 @@ void ChessMainWindow::drawFigure( Device &hDC, int x, int y, int xFactor, int yF
 	hDC.polygon(figure.getDataBuffer(), figure.size());
 }
 
+void ChessMainWindow::makeNextComputerMove()
+{
+	int qual;
+	gak::chess::Movement next = m_board.findBest(m_depth,&qual);
+	if( qual )
+	{
+		if( next.promotionType != gak::chess::Figure::ftNone )
+		{
+			m_board.promote(next.fig, next.promotionType, next.dest );
+		}
+		else
+		{
+			m_board.moveTo( next.fig, next.dest);
+		}
+		STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
+		strChess.writeToFile("chess.txt");
+	}
+	displayEval();
+}
+
+void ChessMainWindow::displayEval()
+{
+	gak::chess::Board::State	state = m_board.getState();
+
+	STRING stateStr = m_board.getStateString();
+	STRING evalStr = gak::formatNumber( m_board.evaluate() );
+	EvalLABEL->setText( stateStr + ' ' + evalStr );
+}
+
 // --------------------------------------------------------------------- //
 // ----- class protected ----------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -263,6 +384,12 @@ void ChessMainWindow::drawFigure( Device &hDC, int x, int y, int xFactor, int yF
    
 ProcessStatus ChessMainWindow::handleCreate( void )
 {
+	m_leftOffset = ControlCHILD->getClientRectangle().getWidth();
+
+	PromotionList->hide();
+	STRING depth = gak::formatNumber(m_depth);
+	DepthEdt->setText(depth);
+	displayEval();
 
 	return psDO_DEFAULT;
 }
@@ -271,9 +398,9 @@ ProcessStatus ChessMainWindow::handleEditChange( int control )
 {
 	switch( control )
 	{
-		case DepthCONTROL_id:
+		case DepthEdt_id:
 		{
-			STRING text = DepthCONTROL->getText();
+			STRING text = DepthEdt->getText();
 			int depth = gak::getValueN<int>(text);
 			if(depth)
 			{
@@ -291,7 +418,18 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 {
 	switch( buttonID )
 	{
-
+		case RestartBtn_id:
+		{
+			m_board.reset();
+			displayEval();
+			invalidateWindow();
+			break;
+		}
+		case TurnBtn_id:
+			m_swapedDisplay = !m_swapedDisplay;
+			makeNextComputerMove();
+			invalidateWindow();
+			break;
 		default:
 			return ChessFORM_form::handleButtonClick( buttonID );
 	}
@@ -302,50 +440,53 @@ ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM m
 {
 	if( leftButton == lbUP )
 	{
-		int leftOffset = LeftCHILD->getClientRectangle().getWidth();
-		int winCol = (position.x-leftOffset)/m_squareSize;
-		int winRow = position.y/m_squareSize;
-
-		if( winCol < gak::chess::NUM_COLS && winRow < gak::chess::NUM_ROWS )
+		Point winPos = mouseToWinBoard(position);
+		if( winPos.x < gak::chess::NUM_COLS && winPos.y < gak::chess::NUM_ROWS )
 		{
-			char chessCol = winCol+gak::chess::MIN_COL_LETTER;
-			char chessRow = gak::chess::NUM_ROWS - winRow;
+			gak::chess::Position chessPos = window2Board( winPos );
 
 			if( !m_selected )
 			{
-				m_selected = m_board.getFigure(chessCol, chessRow);
-				if( m_selected && m_selected->m_color != m_board.getNextColor() )
+				m_selected = m_board.getFigure(chessPos);
+				if( m_selected )
 				{
-					m_selected = NULL;
+					if( m_selected->m_color != m_board.getNextColor() )
+					{
+						unselect();
+					}
+					else if( m_selected->canPromote() )
+					{
+						PromotionList->show();
+					}
 				}
 			}
 			else
 			{
-				gak::chess::Position dest = gak::chess::Position(chessCol, chessRow);
-				if( !m_board.checkMoveTo(m_selected, dest ) )
+				gak::chess::Figure::Type newType = getPromotion();
+				if( !m_board.checkMoveTo(m_selected, chessPos, newType) )
 				{
-					m_board.moveTo(m_selected, dest );
-					m_selected = NULL;
-
-					int qual;
-					gak::chess::Movement next = m_board.findBest(m_depth,&qual);
-					if( qual )
+					if( PromotionList->ForeignWindow::isVisible() )
 					{
-						if( next.promotionType != gak::chess::Figure::ftNone )
+						if( newType )
 						{
-							m_board.promote(next.fig, next.promotionType, next.dest );
+							m_board.promote(m_selected, newType, chessPos);
+							unselect();
+							displayEval();
+							makeNextComputerMove();
 						}
-						else
-						{
-							m_board.moveTo( next.fig, next.dest);
-						}
-						STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
-						strChess.writeToFile("chess.txt");
 					}
+					else
+					{
+						m_board.moveTo(m_selected, chessPos );
+						unselect();
+						displayEval();
+						makeNextComputerMove();
+					}
+
 				}
-				else if(m_selected->getPos() != dest)
+				else if(m_selected->getPos() != chessPos)
 				{
-					m_selected = NULL;
+					unselect();
 				}
 			}
 
@@ -359,8 +500,7 @@ ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM m
 
 ProcessStatus ChessMainWindow::handleResize( const Size &newSize )
 {
-	int leftOffset = 280;
-	int squareWidth = (newSize.width-leftOffset) / gak::chess::NUM_COLS;
+	int squareWidth = (newSize.width-m_leftOffset) / gak::chess::NUM_COLS;
 	int squareHeight = newSize.height / gak::chess::NUM_ROWS;
 	m_squareSize = gak::math::min(squareWidth, squareHeight);
 	m_maxHeight = m_squareSize * gak::chess::NUM_ROWS;
@@ -373,13 +513,13 @@ ProcessStatus ChessMainWindow::handleResize( const Size &newSize )
 ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 {
 	Pen	blackPen = Pen().setColor(0,0,0).setWidth(1);
-	Pen	whitePen = Pen().setColor(0xFF,0xFF,0xFF).setWidth(1);
+//	Pen	whitePen = Pen().setColor(0xFF,0xFF,0xFF).setWidth(1);
 	Pen	selFramePen = Pen().setColor(0,0,0xFF).setWidth(3);
 	Pen	targetFramePen = Pen().setColor(0,0xFF,0).setWidth(3);
 
 	Brush whiteField, blackField, frameBrush;
-	whiteField.create( 237, 222, 147 );
-	blackField.create( 138, 59, 59 );
+	whiteField.create( 240, 239, 216 );
+	blackField.create( 212, 187, 4 );
 	frameBrush.selectBrush(Brush::sbNull);
 
 	Brush whiteFigs, blackFigs;
@@ -388,10 +528,9 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 	hDC.selectPen(blackPen);
 	bool paintWhite=true;
-	int leftOffset = LeftCHILD->getClientRectangle().getWidth();
 	for( int i=0; i<gak::chess::NUM_COLS; ++i )
 	{
-		int left = leftOffset + i*m_squareSize;
+		int left = m_leftOffset + i*m_squareSize;
 		for( int j=0; j<gak::chess::NUM_ROWS; ++j )
 		{
 			if( j )
@@ -406,10 +545,10 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 	for( int i=1, y=m_squareSize; i<= gak::chess::NUM_ROWS; ++i, y += m_squareSize )
 	{
-		hDC.moveTo(leftOffset,y);
+		hDC.moveTo(m_leftOffset,y);
 		hDC.lineTo( m_maxWidth, y );
 	}
-	for( int i=1, x=leftOffset + m_squareSize; i<= gak::chess::NUM_COLS; ++i, x += m_squareSize )
+	for( int i=1, x=m_leftOffset + m_squareSize; i<= gak::chess::NUM_COLS; ++i, x += m_squareSize )
 	{
 		hDC.moveTo(x,0);
 		hDC.lineTo( x, m_maxHeight );
@@ -427,31 +566,32 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 			}
 			else
 			{
-				hDC.selectPen( whitePen );
+				hDC.selectPen( blackPen );
 				hDC.selectBrush( blackFigs );
 			}
 			const gak::chess::Position &pos = fig->getPos();
-			int col = pos.col - gak::chess::MIN_COL_LETTER;
-			int row = pos.row - 1;
+
+			Point winPos = board2Window( fig->getPos() );
+
 			switch( fig->getType() )
 			{
 			case gak::chess::Figure::ftPawn:
-				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, pawn, arraySize(pawn));
+				drawFigure(hDC, winPos, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, pawn, arraySize(pawn));
 				break;
 			case gak::chess::Figure::ftKnight:
-				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
+				drawFigure(hDC, winPos, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, knight, arraySize(knight));
 				break;
 			case gak::chess::Figure::ftBishop:
-				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
+				drawFigure(hDC, winPos, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, bishop, arraySize(bishop));
 				break;
 			case gak::chess::Figure::ftRook:
-				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
+				drawFigure(hDC, winPos, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, rook, arraySize(rook));
 				break;
 			case gak::chess::Figure::ftQueen:
-				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, queen, arraySize(queen));
+				drawFigure(hDC, winPos, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, queen, arraySize(queen));
 				break;
 			case gak::chess::Figure::ftKing:
-				drawFigure(hDC, col,row, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, king, arraySize(king));
+				drawFigure(hDC, winPos, m_squareSize/META_WIDTH, m_squareSize/META_HEIGHT, king, arraySize(king));
 				break;
 			}
 		}
@@ -460,14 +600,12 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 	if(m_selected)
 	{
 		const gak::chess::Position &pos = m_selected->getPos();
-		int left = leftOffset + (pos.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
-		int right = left + m_squareSize;
-		int top = (gak::chess::NUM_ROWS - pos.row) * m_squareSize;
-		int bottom = top + m_squareSize;
+
+		RectBorder rect = board2RectBorder( pos );
 
 		hDC.selectBrush(frameBrush);
 		hDC.selectPen(selFramePen);
-		hDC.rectangle( left, top, right, bottom );
+		hDC.rectangle( rect );
 
 		const gak::chess::PotentialDestinations &pot = m_selected->getPossible();
 
@@ -475,11 +613,8 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 		for( size_t i=0; i<pot.numTargets; ++i )
 		{
-			int left = leftOffset + (pot.targets[i].target.col - gak::chess::MIN_COL_LETTER) * m_squareSize;
-			int right = left + m_squareSize;
-			int top = (gak::chess::NUM_ROWS - pot.targets[i].target.row) * m_squareSize;
-			int bottom = top + m_squareSize;
-			hDC.rectangle( left, top, right, bottom );
+			rect = board2RectBorder( pot.targets[i].target );
+			hDC.rectangle( rect );
 		}
 	}
 	return psPROCESSED;

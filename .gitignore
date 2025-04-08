@@ -44,3 +44,5 @@ bin/
 *.suo
 *.sdf
 ipch/
+
+chess.txt
