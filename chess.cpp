@@ -667,7 +667,7 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 
 		for( size_t i=0; i<pot.numTargets; ++i )
 		{
-			rect = board2RectBorder( pot.targets[i].target );
+			rect = board2RectBorder( pot.targets[i].getTarget() );
 			hDC.rectangle( rect );
 		}
 	}
