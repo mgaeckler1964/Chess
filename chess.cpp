@@ -38,11 +38,13 @@
 // ----- includes ------------------------------------------------------ //
 // --------------------------------------------------------------------- //
 
-#include <WINLIB/WINAPP.H>
 #include <gak/numericString.h>
 #include <gak/fmtNumber.h>
-
 #include <gak/chess.h>
+#include <gak/shared.h>
+
+#include <WINLIB/WINAPP.H>
+#include <WINLIB/AsyncThread.h>
 
 #include "chess_rc.h"
 #include "chess.gui.h"
@@ -69,6 +71,41 @@ using namespace winlibGUI;
 // ----- constants ----------------------------------------------------- //
 // --------------------------------------------------------------------- //
 
+// polygons for the chess figures
+// logical points within an chess field
+
+static const int META_HEIGHT=7;
+static const int META_WIDTH=4;
+
+static const POINT pawn[] =
+{
+	{0,0}, {1, 2}, {0,3}, {1,4}, {2,3}, {1,2}, {2,0}, {0,0}
+};
+static const POINT rook[] =
+{
+	{0,0}, {0,6}, {1,6}, {1,5}, {2,5}, {2, 6}, {3,6}, {3,0}, {0,0}
+};
+
+static const POINT bishop[] =
+{
+	{0,0}, {1,5}, {2,0}, {0,0}
+};
+
+static const POINT knight[] =
+{
+	{1,0}, {2,4}, {0,3}, {2,5}, {3,5}, {4,0}, {1,0}
+};
+
+static const POINT queen[] =
+{
+	{1,0}, {1,5}, {0,6}, {2,7}, {4,6}, {3,5}, {3,0}, {1,0}
+};
+
+static const POINT king[] =
+{
+	{0,0}, {0,5}, {1,5}, {1,6}, {0,6}, {1,6}, {1,7}, {1,6}, {2,6}, {1,6}, {1,5}, {2,5}, {2,0}, {0,0}
+};
+
 // --------------------------------------------------------------------- //
 // ----- macros -------------------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -81,48 +118,30 @@ using namespace winlibGUI;
 // ----- class definitions --------------------------------------------- //
 // --------------------------------------------------------------------- //
 
-static POINT pawn[] =
-{
-	{0,0}, {1, 2}, {0,3}, {1,4}, {2,3}, {1,2}, {2,0}, {0,0}
-};
-static POINT rook[] =
-{
-	{0,0}, {0,6}, {1,6}, {1,5}, {2,5}, {2, 6}, {3,6}, {3,0}, {0,0}
-};
+class ChessMainWindow;
 
-static POINT bishop[] =
+class EngineThread : public winlib::AsyncThread
 {
-	{0,0}, {1,5}, {2,0}, {0,0}
-};
+	gak::chess::Board	&m_board;
+	ChessMainWindow		*m_mainWindow;
 
-static POINT knight[] =
-{
-	{1,0}, {2,4}, {0,3}, {2,5}, {3,5}, {4,0}, {1,0}
+	public:
+	EngineThread(ChessMainWindow *chessWin, gak::chess::Board	&board); 
+	void ExecuteTask();
 };
-
-static POINT queen[] =
-{
-	{1,0}, {1,5}, {0,6}, {2,7}, {4,6}, {3,5}, {3,0}, {1,0}
-};
-
-static POINT king[] =
-{
-	{0,0}, {0,5}, {1,5}, {1,6}, {0,6}, {1,6}, {1,7}, {1,6}, {2,6}, {1,6}, {1,5}, {2,5}, {2,0}, {0,0}
-};
-
-static int META_HEIGHT=7;
-static int META_WIDTH=4;
 
 class ChessMainWindow : public ChessFORM_form
 {
-	int					m_leftOffset;
-	unsigned			m_squareSize;
-	unsigned			m_maxHeight;
-	unsigned			m_maxWidth;
-	int					m_depth;
-	bool				m_swapedDisplay;
-	gak::chess::Board	m_board;
-	gak::chess::Figure	*m_selected;
+	int										m_leftOffset;
+	unsigned								m_squareSize;
+	unsigned								m_maxHeight;
+	unsigned								m_maxWidth;
+	int										m_depth;
+	bool									m_swapedDisplay;
+	gak::chess::Board						m_board;
+	gak::chess::Figure						*m_selected;
+
+	gak::SharedObjectPointer<EngineThread>	m_engineThread;
 
 	// winboard coordinates: left->right/top->bottom (0...7)
 	Point mouseToWinBoard( const Point &position )
@@ -223,6 +242,7 @@ class ChessMainWindow : public ChessFORM_form
 	virtual ProcessStatus handleResize( const Size &newSize );
 	virtual ProcessStatus handleRepaint( Device &hDC );
 	virtual void handleTimer( void );
+	virtual void handleAsyncTaskEnd( void * /*data*/ );
 
 public:
 	ChessMainWindow() : ChessFORM_form( NULL ), m_leftOffset(280), m_squareSize(0), m_swapedDisplay(false), m_selected(NULL), m_depth(1)
@@ -241,6 +261,10 @@ public:
 		{
 			m_board.generateFromString(strChess);
 		}
+	}
+	int getDepth() const
+	{
+		return m_depth;
 	}
 };
 
@@ -306,6 +330,11 @@ static WindowsApplication	windowsApplication;
 // ----- class constructors/destructors -------------------------------- //
 // --------------------------------------------------------------------- //
 
+inline EngineThread::EngineThread(ChessMainWindow *chessWin, gak::chess::Board	&board) 
+	: m_board(board), m_mainWindow(chessWin), winlib::AsyncThread(chessWin, &board) 
+{
+}
+
 // --------------------------------------------------------------------- //
 // ----- class static functions ---------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -352,22 +381,9 @@ void ChessMainWindow::drawFigure( Device &hDC, Point logWindowsPos, int xFactor,
 
 void ChessMainWindow::makeNextComputerMove()
 {
-	int qual;
-	gak::chess::Movement next = m_board.findBest(m_depth,&qual);
-	if( qual )
-	{
-		if( next.promotionType != gak::chess::Figure::ftNone )
-		{
-			m_board.promote(next.fig, next.promotionType, next.dest );
-		}
-		else
-		{
-			m_board.moveTo( next.fig, next.dest);
-		}
-		STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
-		strChess.writeToFile("chess.txt");
-	}
-	displayEval();
+	m_engineThread = new EngineThread(this,m_board);
+	m_engineThread->StartThread();
+	StopBtn->enable();
 }
 
 void ChessMainWindow::displayClock()
@@ -393,6 +409,25 @@ void ChessMainWindow::displayEval()
 // ----- class virtuals ------------------------------------------------ //
 // --------------------------------------------------------------------- //
    
+void EngineThread::ExecuteTask()
+{
+	int qual;
+	gak::chess::Movement next = m_board.findBest(m_mainWindow->getDepth(),&qual);
+	if( qual )
+	{
+		if( next.promotionType != gak::chess::Figure::ftNone )
+		{
+			m_board.promote(next.fig, next.promotionType, next.dest );
+		}
+		else
+		{
+			m_board.moveTo( next.fig, next.dest);
+		}
+		STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
+		strChess.writeToFile("chess.txt");
+	}
+}
+
 ProcessStatus ChessMainWindow::handleCreate( void )
 {
 	m_leftOffset = ControlCHILD->getClientRectangle().getWidth();
@@ -400,6 +435,7 @@ ProcessStatus ChessMainWindow::handleCreate( void )
 	PromotionList->hide();
 	STRING depth = gak::formatNumber(m_depth);
 	DepthEdt->setText(depth);
+	StopBtn->disable();
 	displayEval();
 	setTimer(1000);
 
@@ -430,16 +466,27 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 	{
 		case RestartBtn_id:
 		{
-			m_board.reset();
-			displayEval();
-			invalidateWindow();
+			if( !m_engineThread )
+			{
+				m_board.reset();
+				displayEval();
+				invalidateWindow();
+			}
 			break;
 		}
 		case TurnBtn_id:
-			m_swapedDisplay = !m_swapedDisplay;
-			makeNextComputerMove();
-			invalidateWindow();
+			if( !m_engineThread )
+			{
+				m_swapedDisplay = !m_swapedDisplay;
+				makeNextComputerMove();
+				invalidateWindow();
+			}
 			break;
+		case StopBtn_id:
+			if( m_engineThread )
+			{
+				m_engineThread->StopThread();
+			}
 		default:
 			return ChessFORM_form::handleButtonClick( buttonID );
 	}
@@ -448,7 +495,7 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 
 ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM /* modifier */, const Point &position )
 {
-	if( leftButton == lbUP )
+	if( !m_engineThread && leftButton == lbUP )
 	{
 		Point winPos = mouseToWinBoard(position);
 		if( winPos.x < gak::chess::NUM_COLS && winPos.y < gak::chess::NUM_ROWS )
@@ -630,6 +677,14 @@ ProcessStatus ChessMainWindow::handleRepaint( Device &hDC )
 void ChessMainWindow::handleTimer( void )
 {
 	displayClock();
+}
+
+void ChessMainWindow::handleAsyncTaskEnd( void * /*data*/ )
+{
+	displayEval();
+	m_engineThread = NULL;
+	StopBtn->disable();
+	invalidateWindow();
 }
 
 // --------------------------------------------------------------------- //
