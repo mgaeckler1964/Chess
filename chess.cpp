@@ -229,9 +229,16 @@ class ChessMainWindow : public ChessFORM_form
 		m_selected = NULL;
 		PromotionList->hide();
 	}
+	void postMove()
+	{
+		unselect();
+		displayEval();
+		makeNextComputerMove();
+	}
 
 	void makeNextComputerMove();
 	void displayClock();
+	void displayMoves();
 	void displayEval();
 	void drawFigure( Device &hDC, Point logWindowsPos, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
@@ -364,7 +371,7 @@ void ChessMainWindow::drawFigure( Device &hDC, Point logWindowsPos, int xFactor,
 		minX = gak::math::min(minX, px );
 		maxX = gak::math::max(maxX, px );
 	}
-	if( minX || maxX != m_squareSize )
+	if( minX || maxX != int(m_squareSize) )
 	{
 		int avg = (minX + m_squareSize-maxX)/2;
 		int offset = minX-avg;
@@ -392,13 +399,45 @@ void ChessMainWindow::displayClock()
 	BlackClk->setStopWatch(m_board.getBlackClock());
 }
 
+void ChessMainWindow::displayMoves()
+{
+	static STRING s_last;
+	const gak::chess::Movements &moves = m_board.getMoves();
+	int shown = MovesBOX->getTag();
+	for( int i=shown+1; i<moves.size(); ++i )
+	{
+		const gak::chess::Movement &move = moves[i];
+		STRING moveStr = move.toString();
+		if(move.fig->m_color == gak::chess::Figure::White || !i || s_last.isEmpty())
+		{
+			STRING listStr = gak::formatNumber(i/2+1) + ". ";
+			if( move.fig->m_color == gak::chess::Figure::Black )
+			{
+				listStr += "..., ";
+			}
+			listStr += moveStr;
+			MovesBOX->addEntry(listStr);
+			MovesBOX->setTag( i );
+			s_last = listStr;
+		}
+		else
+		{
+			s_last += ", ";
+			s_last+= moveStr;
+			MovesBOX->replaceEntry(i/2, s_last);
+			MovesBOX->setTag( i );
+			s_last = "";
+		}
+	}
+}
+
 void ChessMainWindow::displayEval()
 {
-	gak::chess::Board::State	state = m_board.getState();
-
 	STRING stateStr = m_board.getStateString();
 	STRING evalStr = gak::formatNumber( m_board.evaluate() );
 	EvalLABEL->setText( stateStr + ' ' + evalStr );
+
+	displayMoves();
 }
 
 // --------------------------------------------------------------------- //
@@ -432,6 +471,7 @@ ProcessStatus ChessMainWindow::handleCreate( void )
 {
 	m_leftOffset = ControlCHILD->getClientRectangle().getWidth();
 
+	MovesBOX->setTag( -1 );
 	PromotionList->hide();
 	STRING depth = gak::formatNumber(m_depth);
 	DepthEdt->setText(depth);
@@ -469,6 +509,8 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 			if( !m_engineThread )
 			{
 				m_board.reset();
+				MovesBOX->setTag( -1 );
+				MovesBOX->clearEntries();
 				displayEval();
 				invalidateWindow();
 			}
@@ -522,22 +564,25 @@ ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM /
 				gak::chess::Figure::Type newType = getPromotion();
 				if( !m_board.checkMoveTo(m_selected, chessPos, newType) )
 				{
-					if( PromotionList->ForeignWindow::isVisible() )
+					gak::chess::King *king = dynamic_cast<gak::chess::King*>(m_selected);
+					const gak::chess::King::Rochade *rochade = king ? king->getRochade(chessPos) : NULL;
+					if( rochade )
+					{
+						m_board.rochade(m_selected,rochade->rook,chessPos,rochade->rookTarget);
+						postMove();
+					}
+					else if( PromotionList->ForeignWindow::isVisible() )
 					{
 						if( newType )
 						{
 							m_board.promote(m_selected, newType, chessPos);
-							unselect();
-							displayEval();
-							makeNextComputerMove();
+							postMove();
 						}
 					}
 					else
 					{
 						m_board.moveTo(m_selected, chessPos );
-						unselect();
-						displayEval();
-						makeNextComputerMove();
+						postMove();
 					}
 
 				}
