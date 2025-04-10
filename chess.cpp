@@ -15,7 +15,7 @@
 		You should have received a copy of the GNU General Public License 
 		along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-		THIS SOFTWARE IS PROVIDED BY Martin Gäckler, Austria, Linz ``AS IS''
+		THIS SOFTWARE IS PROVIDED BY Martin Gäckler, Linz, Austria ``AS IS''
 		AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
 		TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
 		PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR
@@ -401,14 +401,13 @@ void ChessMainWindow::displayClock()
 
 void ChessMainWindow::displayMoves()
 {
-	static STRING s_last;
 	const gak::chess::Movements &moves = m_board.getMoves();
 	int shown = MovesBOX->getTag();
 	for( int i=shown+1; i<moves.size(); ++i )
 	{
 		const gak::chess::Movement &move = moves[i];
 		STRING moveStr = move.toString();
-		if(move.fig->m_color == gak::chess::Figure::White || !i || s_last.isEmpty())
+		if(move.fig->m_color == gak::chess::Figure::White || !i )
 		{
 			STRING listStr = gak::formatNumber(i/2+1) + ". ";
 			if( move.fig->m_color == gak::chess::Figure::Black )
@@ -418,15 +417,14 @@ void ChessMainWindow::displayMoves()
 			listStr += moveStr;
 			MovesBOX->addEntry(listStr);
 			MovesBOX->setTag( i );
-			s_last = listStr;
 		}
 		else
 		{
-			s_last += ", ";
-			s_last+= moveStr;
-			MovesBOX->replaceEntry(i/2, s_last);
+			STRING last = MovesBOX->getEntry( i/2 );
+			last += ", ";
+			last+= moveStr;
+			MovesBOX->replaceEntry(i/2, last);
 			MovesBOX->setTag( i );
-			s_last = "";
 		}
 	}
 }
@@ -450,6 +448,7 @@ void ChessMainWindow::displayEval()
    
 void EngineThread::ExecuteTask()
 {
+	static int count=0;
 	int qual;
 	gak::chess::Movement next = m_board.findBest(m_mainWindow->getDepth(),&qual);
 	if( qual )
@@ -464,6 +463,8 @@ void EngineThread::ExecuteTask()
 		}
 		STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
 		strChess.writeToFile("chess.txt");
+		STRING chess2 = STRING("chess") + gak::formatNumber( ++count ) + ".txt";
+		strChess.writeToFile(chess2);
 	}
 }
 

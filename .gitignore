@@ -45,4 +45,4 @@ bin/
 *.sdf
 ipch/
 
-chess.txt
+chess*.txt
