@@ -1,7 +1,12 @@
 # Chess
  Chess game
 
+
 Requires Winlib and Gaklib.
+
+The latest version can be downloaded here:
+
+https://www.gaeckler.at/Software/software.htm#chess
 
 ![Unbenannt](https://github.com/user-attachments/assets/14b65d7b-a8c3-4542-936c-08a9834bb109)
 
@@ -17,3 +22,9 @@ gespeichert und beim Starten geladen.
 
 Wenn Du einen Fehler findest, kannst Du mir die letzten chess[n].txt schicken,
 damit ich den Fehler analysieren kann.
+
+Die neuese Version kann hier geladen werden:
+
+https://www.gaeckler.at/Software/software.htm#chess
+
+
