@@ -549,12 +549,8 @@ ProcessStatus ChessMainWindow::handleEditChange( int control )
 			if( m_created )
 			{
 				STRING text = DepthEdt->getText();
-				int depth = gak::getValueN<int>(text);
-				if(depth)
-				{
-					m_depth = depth;
-					app.WriteProfile( false, "", "depth", depth );
-				}
+				m_depth = gak::getValueN<int>(text);
+				app.WriteProfile( false, "", "depth", m_depth );
 			}
 
 		}
