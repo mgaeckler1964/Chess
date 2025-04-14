@@ -132,6 +132,7 @@ class EngineThread : public winlib::AsyncThread
 
 class ChessMainWindow : public ChessFORM_form
 {
+	bool									m_created;
 	int										m_leftOffset;
 	unsigned								m_squareSize;
 	unsigned								m_maxHeight;
@@ -252,23 +253,7 @@ class ChessMainWindow : public ChessFORM_form
 	virtual void handleAsyncTaskEnd( void * /*data*/ );
 
 public:
-	ChessMainWindow() : ChessFORM_form( NULL ), m_leftOffset(280), m_squareSize(0), m_swapedDisplay(false), m_selected(NULL), m_depth(1)
-	{
-		STRING strChess;
-		
-		if( gak::exists("chess.txt") )
-		{
-			strChess.readFromFile("chess.txt");
-		}
-		if( strChess.isEmpty() )
-		{
-			m_board.reset();
-		}
-		else
-		{
-			m_board.generateFromString(strChess);
-		}
-	}
+	ChessMainWindow();
 	int getDepth() const
 	{
 		return m_depth;
@@ -315,7 +300,7 @@ class WindowsApplication : public GuiApplication
 // ----- module static data -------------------------------------------- //
 // --------------------------------------------------------------------- //
 
-static WindowsApplication	windowsApplication;
+static WindowsApplication	app;
 
 // --------------------------------------------------------------------- //
 // ----- class static data --------------------------------------------- //
@@ -329,6 +314,52 @@ static WindowsApplication	windowsApplication;
 // ----- module functions ---------------------------------------------- //
 // --------------------------------------------------------------------- //
 
+static STRING getChessPath()
+{
+	static STRING s_thePath;
+
+	if( s_thePath.isEmpty() )
+	{
+		s_thePath = getenv("TMP");
+		if( s_thePath.isEmpty() )
+		{
+			s_thePath = getenv("TEMP");
+		}
+		s_thePath.condAppend( DIRECTORY_DELIMITER );
+	}
+	return s_thePath;
+}
+
+static STRING getBaseChessFile()
+{
+	static STRING s_thePath;
+
+	if( s_thePath.isEmpty() )
+	{
+		s_thePath = getChessPath() + "chess";
+	}
+	return s_thePath;
+}
+
+static STRING getChessFile()
+{
+	static STRING s_thePath;
+
+	if( s_thePath.isEmpty() )
+	{
+		s_thePath = getBaseChessFile() + ".txt";
+	}
+	return s_thePath;
+}
+
+static STRING getNumberedChessFile()
+{
+	static size_t number = 0;
+	STRING thePath = getBaseChessFile() + gak::formatNumber( ++number ) + ".txt";
+
+	return thePath;
+}
+
 // --------------------------------------------------------------------- //
 // ----- class inlines ------------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -340,6 +371,25 @@ static WindowsApplication	windowsApplication;
 inline EngineThread::EngineThread(ChessMainWindow *chessWin, gak::chess::Board	&board) 
 	: m_board(board), m_mainWindow(chessWin), winlib::AsyncThread(chessWin, &board) 
 {
+}
+
+ChessMainWindow::ChessMainWindow() : ChessFORM_form( NULL ), m_created(false), m_leftOffset(280), m_squareSize(0), m_swapedDisplay(false), m_selected(NULL), m_depth(1)
+{
+	STRING chessFile = getChessFile();
+	STRING strChess;
+		
+	if( gak::exists(chessFile) )
+	{
+		strChess.readFromFile(chessFile);
+	}
+	if( strChess.isEmpty() )
+	{
+		m_board.reset();
+	}
+	else
+	{
+		m_board.generateFromString(strChess);
+	}
 }
 
 // --------------------------------------------------------------------- //
@@ -426,14 +476,18 @@ void ChessMainWindow::displayMoves()
 			MovesBOX->replaceEntry(i/2, last);
 			MovesBOX->setTag( i );
 		}
+		MovesBOX->showLast();
 	}
 }
 
 void ChessMainWindow::displayEval()
 {
 	STRING stateStr = m_board.getStateString();
-	STRING evalStr = gak::formatNumber( m_board.evaluate() );
-	EvalLABEL->setText( stateStr + ' ' + evalStr );
+	if( m_board.canPlay() )
+	{
+		stateStr = gak::formatNumber( m_board.evaluate() ) + STRING(' ') + stateStr;
+	}
+	EvalLABEL->setText( stateStr );
 
 	displayMoves();
 }
@@ -462,9 +516,8 @@ void EngineThread::ExecuteTask()
 			m_board.moveTo( next.fig, next.dest);
 		}
 		STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
-		strChess.writeToFile("chess.txt");
-		STRING chess2 = STRING("chess") + gak::formatNumber( ++count ) + ".txt";
-		strChess.writeToFile(chess2);
+		strChess.writeToFile(getChessFile());
+		strChess.writeToFile(getNumberedChessFile());
 	}
 }
 
@@ -480,6 +533,10 @@ ProcessStatus ChessMainWindow::handleCreate( void )
 	displayEval();
 	setTimer(1000);
 
+	m_depth = app.GetProfile( "", "depth", 1 );
+	DepthEdt->setText( gak::formatNumber(m_depth) );
+
+	m_created = true;
 	return psDO_DEFAULT;
 }
 
@@ -489,11 +546,15 @@ ProcessStatus ChessMainWindow::handleEditChange( int control )
 	{
 		case DepthEdt_id:
 		{
-			STRING text = DepthEdt->getText();
-			int depth = gak::getValueN<int>(text);
-			if(depth)
+			if( m_created )
 			{
-				m_depth = depth;
+				STRING text = DepthEdt->getText();
+				int depth = gak::getValueN<int>(text);
+				if(depth)
+				{
+					m_depth = depth;
+					app.WriteProfile( false, "", "depth", depth );
+				}
 			}
 
 		}
