@@ -239,7 +239,7 @@ class ChessMainWindow : public ChessFORM_form
 
 	void makeNextComputerMove();
 	void displayClock();
-	void displayMoves();
+	void displayHistory();
 	void displayEval();
 	void drawFigure( Device &hDC, Point logWindowsPos, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
@@ -449,9 +449,9 @@ void ChessMainWindow::displayClock()
 	BlackClk->setStopWatch(m_board.getBlackClock());
 }
 
-void ChessMainWindow::displayMoves()
+void ChessMainWindow::displayHistory()
 {
-	const gak::chess::Movements &moves = m_board.getMoves();
+	const gak::chess::Movements &moves = m_board.getHistory();
 	int shown = MovesBOX->getTag();
 	for( int i=shown+1; i<moves.size(); ++i )
 	{
@@ -489,7 +489,7 @@ void ChessMainWindow::displayEval()
 	}
 	EvalLABEL->setText( stateStr );
 
-	displayMoves();
+	displayHistory();
 }
 
 // --------------------------------------------------------------------- //
@@ -507,14 +507,7 @@ void EngineThread::ExecuteTask()
 	gak::chess::Movement next = m_board.findBest(m_mainWindow->getDepth(),&qual);
 	if( qual )
 	{
-		if( next.promotionType != gak::chess::Figure::ftNone )
-		{
-			m_board.promote(next.fig, next.promotionType, next.dest );
-		}
-		else
-		{
-			m_board.moveTo( next.fig, next.dest);
-		}
+		m_board.performMove( next );
 		STRING strChess = m_board.generateString()+ (m_board.isWhiteTurn() ? 'W' : 'S');
 		strChess.writeToFile(getChessFile());
 		strChess.writeToFile(getNumberedChessFile());
