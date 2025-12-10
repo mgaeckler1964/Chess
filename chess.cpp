@@ -409,7 +409,7 @@ void ChessMainWindow::drawFigure( Device &hDC, Point logWindowsPos, int xFactor,
 
 	int minX = m_squareSize;
 	int maxX = 0;
-	gak::PODarray<POINT>	figure;
+	gak::PODarray<Point>	figure;
 	figure.createElements(numPoints);
 	for( size_t i=0; i<numPoints; ++i )
 	{
@@ -433,7 +433,7 @@ void ChessMainWindow::drawFigure( Device &hDC, Point logWindowsPos, int xFactor,
 			}
 		}
 	}
-	hDC.polygon(figure.getDataBuffer(), int(figure.size()));
+	hDC.polygon(figure);
 }
 
 void ChessMainWindow::makeNextComputerMove()
