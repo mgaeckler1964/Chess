@@ -272,7 +272,7 @@ class WindowsApplication : public GuiApplication
 	}
 	virtual CallbackWindow *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ )
 	{
-		std::auto_ptr<ChessMainWindow>	mainWindow( new ChessMainWindow );
+		std::unique_ptr<ChessMainWindow>	mainWindow( new ChessMainWindow );
 		if( mainWindow->create( nullptr ) == scERROR )
 		{
 			throw gak::LibraryException( "Could not create window!" );
