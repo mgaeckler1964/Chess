@@ -243,16 +243,16 @@ class ChessMainWindow : public ChessFORM_form
 	void displayEval();
 	void drawFigure( Device &hDC, Point logWindowsPos, int xFactor, int yFactor, const POINT *points, size_t numPoints );
 
-	virtual ProcessStatus handleCreate( void );
-	virtual ProcessStatus handleEditChange( int control );
-	virtual ProcessStatus handleButtonClick( int control );
-	virtual ProcessStatus handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position );
-	virtual ProcessStatus handleResize( const Size &newSize );
-	virtual ProcessStatus handleRepaint( Device &hDC );
-	virtual void handleTimer( void );
-	virtual void handleAsyncTaskEnd( void * /*data*/ );
+	ProcessStatus handleCreate( void ) override;
+	ProcessStatus handleEditChange( int control ) override;
+	ProcessStatus handleButtonClick( int control ) override;
+	ProcessStatus handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position ) override;
+	ProcessStatus handleResize( const Size &newSize ) override;
+	ProcessStatus handleRepaint( Device &hDC ) override;
+	void handleTimer( void ) override;
+	void handleAsyncTaskEnd( void * /*data*/ ) override;
 
-public:
+	public:
 	ChessMainWindow();
 	int getDepth() const
 	{
@@ -262,7 +262,7 @@ public:
 
 class WindowsApplication : public GuiApplication
 {
-	virtual bool startApplication( HINSTANCE /*hInstance*/, const char * /*cmdLine*/ )
+	bool startApplication( HINSTANCE /*hInstance*/, const char * /*cmdLine*/ ) override
 	{
 		doEnableLogEx(gakLogging::llInfo);
 		doDisableLog();
@@ -270,7 +270,7 @@ class WindowsApplication : public GuiApplication
 		setCompany("gak");
 		return 0;
 	}
-	virtual CallbackWindow *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ )
+	CallbackWindow *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ ) override
 	{
 		std::unique_ptr<ChessMainWindow>	mainWindow( new ChessMainWindow );
 		if( mainWindow->create( nullptr ) == scERROR )
@@ -281,7 +281,7 @@ class WindowsApplication : public GuiApplication
 		mainWindow->focus();
 		return mainWindow.release();
 	}
-	virtual void deleteMainWindow( BasicWindow  *mainWindow )
+	void deleteMainWindow( BasicWindow  *mainWindow ) override
 	{
 		delete mainWindow;
 	}
