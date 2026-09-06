@@ -1,11 +1,11 @@
 /*
-	this file was created from C:\CRESD\Source\chess\chess.gui with MG Gui Builder
+	this file was created from C:\CRESD\Source\Chess\chess.gui with MG Gui Builder
 	+++++++++++++++++++++++
 	!!!!! Do not Edit !!!!!
 	+++++++++++++++++++++++
 */
 
-#include "C:\CRESD\Source\chess\chess.gui.h"
+#include "C:\CRESD\Source\Chess\chess.gui.h"
 
 namespace winlibGUI {
 

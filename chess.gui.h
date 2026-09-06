@@ -1,5 +1,5 @@
 /*
-	this file was created from C:\CRESD\Source\chess\chess.gui with MG Gui Builder
+	this file was created from C:\CRESD\Source\Chess\chess.gui with MG Gui Builder
 	+++++++++++++++++++++++
 	!!!!! Do not Edit !!!!!
 	+++++++++++++++++++++++
@@ -9,8 +9,9 @@
 #include <winlib/popup.h>
 #include <winlib/frame.h>
 #include <winlib/scrollFrame.h>
-#include <winlib/ControlW.h>
+#include <winlib/ControlWindow.h>
 #include <winlib/xmlEditorChild.h>
+#include <winlib/chartWin.h>
 #include <winlib/gridView.h>
 
 #include <winlib/winApp.h>
@@ -35,7 +36,7 @@ namespace winlibGUI {
 
 	class GuiApplication : public winlib::Application {
 		public:
-		virtual gak::xml::Document *getGuiDoc( void );
+		virtual gak::xml::Document *getGuiDoc();
 		GuiApplication(int iconID=-1) : winlib::Application(iconID) {}
 	};
 
