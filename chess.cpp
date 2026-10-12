@@ -246,7 +246,7 @@ class ChessMainWindow : public ChessFORM_form
 	ProcessStatus handleCreate( void ) override;
 	ProcessStatus handleEditChange( int control ) override;
 	ProcessStatus handleButtonClick( int control ) override;
-	ProcessStatus handleLeftButton( LeftButton leftButton, WPARAM modifier, const Point &position ) override;
+	ProcessStatus handleLeftButton( LeftButton leftButton, ModifierFlags modifier, const Point &position ) override;
 	ProcessStatus handleResize( const Size &newSize ) override;
 	ProcessStatus handleRepaint( Device &hDC ) override;
 	void handleTimer( void ) override;
@@ -584,7 +584,7 @@ ProcessStatus ChessMainWindow::handleButtonClick( int buttonID )
 	return psPROCESSED;
 }
 
-ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, WPARAM /* modifier */, const Point &position )
+ProcessStatus ChessMainWindow::handleLeftButton( LeftButton leftButton, ModifierFlags /* modifier */, const Point &position )
 {
 	if( !m_engineThread && leftButton == lbUP )
 	{
